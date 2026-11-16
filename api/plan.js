@@ -1,5 +1,11 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
+const MODEL_CANDIDATES = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
+];
+
 const SYSTEM_INSTRUCTION = `
 당신은 모바일 여행 일정 플래너 앱의 전용 일정 생성 엔진입니다. 아래 규칙을 반드시 지키세요.
 
@@ -16,6 +22,7 @@ const SYSTEM_INSTRUCTION = `
 3. 동선 및 카드 데이터 품질:
    - 하루 일정은 지리적으로 인접한 권역 중심으로 묶어 이동 동선을 효율적으로 구성하세요.
    - place 필드에는 사용자가 지도 앱에서 바로 검색할 수 있도록 실제 지명이나 장소명을 명확하게 적으세요.
+   - lat, lng 필드에는 해당 장소의 실제 위도와 경도를 숫자로 기입하세요.
 `.trim();
 
 const PLAN_RESPONSE_SCHEMA = {
@@ -61,7 +68,7 @@ const PLAN_RESPONSE_SCHEMA = {
           },
           theme: {
             type: Type.STRING,
-            description: '해당 일차의 소제목 (예: 해안선 따라 걷는 첫날)',
+            description: '해당 일차의 소제목',
           },
           items: {
             type: Type.ARRAY,
@@ -90,8 +97,16 @@ const PLAN_RESPONSE_SCHEMA = {
                   type: Type.STRING,
                   description: '동선 팁 또는 사전 확인 권유 사항 (영업시간·요금 단정 금지)',
                 },
+                lat: {
+                  type: Type.NUMBER,
+                  description: '방문 장소의 위도 좌표',
+                },
+                lng: {
+                  type: Type.NUMBER,
+                  description: '방문 장소의 경도 좌표',
+                },
               },
-              required: ['time', 'place', 'category', 'description', 'tip'],
+              required: ['time', 'place', 'category', 'description', 'tip', 'lat', 'lng'],
             },
           },
         },
@@ -114,6 +129,49 @@ const PLAN_RESPONSE_SCHEMA = {
 function sanitizeText(value, maxLength) {
   if (typeof value !== 'string') return '';
   return value.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, maxLength);
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function generateWithFallback(ai, userPrompt) {
+  let lastError = null;
+
+  for (let i = 0; i < MODEL_CANDIDATES.length; i++) {
+    const model = MODEL_CANDIDATES[i];
+    try {
+      return await ai.models.generateContent({
+        model,
+        contents: userPrompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: PLAN_RESPONSE_SCHEMA,
+          temperature: 0.7,
+        },
+      });
+    } catch (err) {
+      lastError = err;
+      const status = err?.status;
+      const msg = String(err?.message || '');
+      const isRetryable =
+        status === 503 ||
+        status === 429 ||
+        status === 404 ||
+        msg.includes('UNAVAILABLE') ||
+        msg.includes('high demand');
+
+      console.warn(`Model ${model} failed (status=${status}): ${msg}`);
+
+      if (!isRetryable) {
+        throw err;
+      }
+      if (i < MODEL_CANDIDATES.length - 1) {
+        await sleep(700);
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 export default async function handler(req, res) {
@@ -159,19 +217,7 @@ export default async function handler(req, res) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-
-    // api/plan.js 내부의 gemini 호출 및 catch 부분 수정
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: userPrompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: PLAN_RESPONSE_SCHEMA,
-        temperature: 0.7,
-      },
-    });
-
+    const response = await generateWithFallback(ai, userPrompt);
     const parsed = JSON.parse(response.text);
 
     if (!parsed.isTravelRequest) {
@@ -188,10 +234,15 @@ export default async function handler(req, res) {
       notice: parsed.notice,
       days: parsed.days,
     });
- } catch (error) {
+  } catch (error) {
     console.error('Gemini /api/plan error:', error);
+    const isOverloaded =
+      error?.status === 503 || String(error?.message || '').includes('UNAVAILABLE');
+
     return res.status(502).json({
-      error: `일정 생성 오류: ${error?.message || '잠시 후 다시 시도해 주세요.'}`,
+      error: isOverloaded
+        ? '현재 AI 서버에 일시적으로 요청이 몰려 지연되고 있습니다. 10초 후 다시 눌러 주세요.'
+        : '여행 일정을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
     });
   }
 }
