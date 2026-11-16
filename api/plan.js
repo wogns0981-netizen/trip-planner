@@ -1,9 +1,9 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-const MODEL_CANDIDATES = [
+const PRIMARY_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-2.0-flash',
+  'gemini-2.5-pro',
 ];
 
 const SYSTEM_INSTRUCTION = `
@@ -133,116 +133,81 @@ function sanitizeText(value, maxLength) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function discoverActiveFlashModels(ai) {
+  try {
+    const pager = await ai.models.list();
+    const discovered = [];
+    for await (const m of pager) {
+      const id = String(m?.name || '').replace(/^models\//, '');
+      const actions = m?.supportedActions || [];
+      const isTextGemini =
+        id.startsWith('gemini-') &&
+        !id.includes('embedding') &&
+        !id.includes('imagen') &&
+        !id.includes('veo') &&
+        !id.includes('tts') &&
+        !id.includes('audio') &&
+        !id.includes('robotics') &&
+        !id.includes('computer-use') &&
+        (actions.length === 0 || actions.includes('generateContent'));
+
+      if (isTextGemini && id.includes('flash')) {
+        discovered.push(id);
+      }
+    }
+    return discovered.reverse();
+  } catch {
+    return [];
+  }
+}
+
 async function generateWithFallback(ai, userPrompt) {
+  const tried = new Set();
+  const queue = [...PRIMARY_MODELS];
+  let discoveredChecked = false;
   let lastError = null;
 
-  for (let i = 0; i < MODEL_CANDIDATES.length; i++) {
-    const model = MODEL_CANDIDATES[i];
-    try {
-      return await ai.models.generateContent({
-        model,
-        contents: userPrompt,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: PLAN_RESPONSE_SCHEMA,
-          temperature: 0.7,
-        },
-      });
-    } catch (err) {
-      lastError = err;
-      const status = err?.status;
-      const msg = String(err?.message || '');
-      const isRetryable =
-        status === 503 ||
-        status === 429 ||
-        status === 404 ||
-        msg.includes('UNAVAILABLE') ||
-        msg.includes('high demand');
+  while (queue.length > 0) {
+    const model = queue.shift();
+    if (tried.has(model)) continue;
+    tried.add(model);
 
-      console.warn(`Model ${model} failed (status=${status}): ${msg}`);
+    // 503 일시적 트래픽 혼잡 시 동일 모델 최대 2회 시도
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await ai.models.generateContent({
+          model,
+          contents: userPrompt,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            responseSchema: PLAN_RESPONSE_SCHEMA,
+            temperature: 0.7,
+          },
+        });
+      } catch (err) {
+        lastError = err;
+        const status = err?.status;
+        const msg = String(err?.message || '');
+        console.warn(`Model ${model} attempt ${attempt} failed (status=${status}): ${msg}`);
 
-      if (!isRetryable) {
-        throw err;
+        if (status === 404) {
+          // 존재하지 않는 모델이면 즉시 다음 모델로 이동
+          break;
+        }
+
+        const isTemporary =
+          status === 503 ||
+          status === 429 ||
+          msg.includes('UNAVAILABLE') ||
+          msg.includes('high demand');
+
+        if (!isTemporary) {
+          throw err;
+        }
+
+        if (attempt === 1) {
+          await sleep(1200);
+        }
       }
-      if (i < MODEL_CANDIDATES.length - 1) {
-        await sleep(700);
-      }
     }
-  }
-
-  throw lastError;
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'POST 요청만 허용됩니다.' });
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: '서버에 GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
-  }
-
-  let body = req.body;
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch {
-      return res.status(400).json({ error: '잘못된 JSON 형식입니다.' });
-    }
-  }
-
-  const destination = sanitizeText(body?.destination, 60);
-  const duration = sanitizeText(String(body?.duration ?? ''), 30);
-  const companion = sanitizeText(body?.companion, 40) || '자유';
-  const rawInterests = Array.isArray(body?.interests)
-    ? body.interests.map((item) => sanitizeText(String(item), 30)).filter(Boolean).slice(0, 10).join(', ')
-    : sanitizeText(String(body?.interests ?? ''), 150);
-
-  if (!destination || !duration) {
-    return res.status(400).json({ error: '여행지(destination)와 기간(duration)은 필수 입력값입니다.' });
-  }
-
-  const userPrompt = [
-    '아래 사용자 입력을 바탕으로 일차별 여행 일정을 JSON으로 생성해 주세요.',
-    '<user_travel_input>',
-    `여행지: ${destination}`,
-    `기간: ${duration}`,
-    `동행: ${companion}`,
-    `관심사: ${rawInterests || '주요 명소 및 로컬 맛집'}`,
-    '</user_travel_input>',
-  ].join('\n');
-
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await generateWithFallback(ai, userPrompt);
-    const parsed = JSON.parse(response.text);
-
-    if (!parsed.isTravelRequest) {
-      return res.status(400).json({
-        error: parsed.rejectionMessage || '여행 일정과 관련된 요청만 처리할 수 있습니다.',
-      });
-    }
-
-    return res.status(200).json({
-      destination: parsed.destination || destination,
-      duration: parsed.duration || duration,
-      companion: parsed.companion || companion,
-      summary: parsed.summary,
-      notice: parsed.notice,
-      days: parsed.days,
-    });
-  } catch (error) {
-    console.error('Gemini /api/plan error:', error);
-    const isOverloaded =
-      error?.status === 503 || String(error?.message || '').includes('UNAVAILABLE');
-
-    return res.status(502).json({
-      error: isOverloaded
-        ? '현재 AI 서버에 일시적으로 요청이 몰려 지연되고 있습니다. 10초 후 다시 눌러 주세요.'
-        : '여행 일정을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-    });
-  }
-}
