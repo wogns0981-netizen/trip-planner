@@ -160,8 +160,9 @@ export default async function handler(req, res) {
   try {
     const ai = new GoogleGenAI({ apiKey });
 
+    // api/plan.js 내부의 gemini 호출 및 catch 부분 수정
     const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-2.5-flash',
       contents: userPrompt,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
