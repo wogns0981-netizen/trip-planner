@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AI 트립 플래너 · 맞춤 여행 일정 생성기</title>
+
+  <!-- Pretendard 웹폰트 CDN -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tailwind 커스텀 설정 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'sans-serif'],
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(12px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            shake: {
+              '0%, 100%': { transform: 'translateX(0)' },
+              '20%, 60%': { transform: 'translateX(-5px)' },
+              '40%, 80%': { transform: 'translateX(5px)' },
+            }
+          },
+          animation: {
+            'fade-in-up': 'fadeInUp 0.35s ease-out forwards',
+            'shake': 'shake 0.35s ease-in-out',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 기본 폰트 및 스크롤바 최적화 */
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      word-break: keep-all;
+    }
+
+    /* 가로 스크롤 영역 스크롤바 숨김 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-700">
+
+  <!-- 모바일 퍼스트 중앙 정렬 메인 컨테이너 -->
+  <div class="min-h-screen max-w-md mx-auto bg-slate-50 shadow-xl shadow-slate-200/80 flex flex-col relative overflow-x-hidden">
+
+    <!-- 상단 고정 헤더 -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/70 px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-500 text-white flex items-center justify-center shadow-sm shadow-indigo-200">
+          <!-- 여행 나침반/비행기 아이콘 -->
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-slate-900 leading-tight">AI 트립 플래너</h1>
+          <p class="text-[11px] text-slate-500 font-medium">취향 저격 맞춤 코스 자동 설계</p>
+        </div>
+      </div>
+
+      <!-- /api/plan 연동 가이드 모달 트리거 버튼 -->
+      <button
+        type="button"
+        id="openGuideBtn"
+        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 active:scale-95 transition-all border border-indigo-100"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+        </svg>
+        <span>/api/plan 연동 가이드</span>
+      </button>
+    </header>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <main class="flex-1 px-4 pt-5 pb-12 space-y-6">
+
+      <!-- 1. 여행 조건 입력 폼 섹션 -->
+      <section id="formSection" class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/70 space-y-6">
+
+        <!-- 여행지 입력 -->
+        <div class="space-y-2.5">
+          <label for="destinationInput" class="flex items-center justify-between text-sm font-bold text-slate-800">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+              </svg>
+              어디로 떠나시나요?
+            </span>
+            <span class="text-[11px] font-normal text-slate-400">도시 또는 지역명</span>
+          </label>
+
+          <div id="destinationInputWrapper" class="relative">
+            <input
+              type="text"
+              id="destinationInput"
+              value="강릉"
+              placeholder="예: 강릉, 제주도, 경주, 도쿄..."
+              class="w-full px-4 py-3.5 pr-10 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+            />
+            <button
+              type="button"
+              id="clearDestinationBtn"
+              aria-label="입력 지우기"
+              class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 rounded-full"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- 추천 여행지 태그 칩 -->
+          <div class="flex flex-wrap gap-1.5 pt-0.5" id="destinationChips">
+            <button type="button" data-dest="강릉" class="dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-indigo-600 text-white border-indigo-600 shadow-sm">강릉</button>
+            <button type="button" data-dest="제주도" class="dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">제주도</button>
+            <button type="button" data-dest="부산" class="dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">부산</button>
+            <button type="button" data-dest="서울" class="dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">서울</button>
+            <button type="button" data-dest="도쿄" class="dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">도쿄</button>
+          </div>
+        </div>
+
+        <!-- 여행 기간 선택 -->
+        <div class="space-y-2.5">
+          <label class="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            여행 기간
+          </label>
+          <div class="grid grid-cols-4 gap-2" id="durationGroup">
+            <button type="button" data-duration="당일치기" class="duration-btn py-3 px-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">당일치기</button>
+            <button type="button" data-duration="1박 2일" class="duration-btn py-3 px-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 bg-indigo-600 text-white border-indigo-600 shadow-sm">1박 2일</button>
+            <button type="button" data-duration="2박 3일" class="duration-btn py-3 px-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">2박 3일</button>
+            <button type="button" data-duration="3박 4일" class="duration-btn py-3 px-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">3박 4일</button>
+          </div>
+        </div>
+
+        <!-- 동행 선택 -->
+        <div class="space-y-2.5">
+          <label class="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
+            누구와 함께 가나요?
+          </label>
+          <div class="grid grid-cols-4 gap-2" id="companionGroup">
+            <button type="button" data-companion="혼자서" class="companion-chip py-2.5 px-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">혼자서</button>
+            <button type="button" data-companion="연인" class="companion-chip py-2.5 px-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-indigo-600 text-white border-indigo-600 shadow-sm">연인</button>
+            <button type="button" data-companion="친구들과" class="companion-chip py-2.5 px-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">친구들과</button>
+            <button type="button" data-companion="가족과" class="companion-chip py-2.5 px-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">가족과</button>
+          </div>
+        </div>
+
+        <!-- 관심사 다중 선택 + 직접 추가 -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+              <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              </svg>
+              여행 관심사
+            </label>
+            <span class="text-[11px] font-medium text-indigo-600" id="interestCountBadge">2개 선택됨</span>
+          </div>
+
+          <!-- 토글 칩 목록 -->
+          <div class="flex flex-wrap gap-2" id="interestChips">
+            <button type="button" data-interest="맛집 탐방" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-indigo-50 text-indigo-700 border-indigo-300">맛집 탐방</button>
+            <button type="button" data-interest="감성 카페" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-indigo-50 text-indigo-700 border-indigo-300">감성 카페</button>
+            <button type="button" data-interest="자연/힐링" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">자연/힐링</button>
+            <button type="button" data-interest="액티비티" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">액티비티</button>
+            <button type="button" data-interest="인생샷" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">인생샷</button>
+            <button type="button" data-interest="야경/드라이브" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">야경/드라이브</button>
+            <button type="button" data-interest="문화/전시" class="interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50">문화/전시</button>
+          </div>
+
+          <!-- 추가 관심사 직접 입력칸 -->
+          <div class="flex gap-2 pt-1">
+            <input
+              type="text"
+              id="customInterestInput"
+              placeholder="직접 입력 (예: 빵지순례, 서핑, 쇼핑)"
+              class="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-500 transition-all"
+            />
+            <button
+              type="button"
+              id="addInterestBtn"
+              class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-semibold transition-all shrink-0"
+            >
+              + 추가
+            </button>
+          </div>
+        </div>
+
+        <!-- 하단 풀와이드 CTA 버튼 -->
+        <button
+          type="button"
+          id="generateBtn"
+          class="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 active:scale-[0.99] text-white font-bold text-base shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+          </svg>
+          <span>맞춤 여행 일정 생성하기</span>
+        </button>
+      </section>
+
+      <!-- 2. 로딩 스켈레톤 UI 섹션 (초기 숨김) -->
+      <section id="loadingSection" class="hidden space-y-4 animate-pulse" aria-live="polite">
+        <div class="flex items-center justify-between px-1">
+          <div class="h-6 w-48 bg-slate-200 rounded-full"></div>
+          <div class="h-5 w-16 bg-slate-200 rounded-full"></div>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 border border-slate-200/70 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-7 bg-indigo-100 rounded-xl"></div>
+            <div class="h-5 w-44 bg-slate-200 rounded-lg"></div>
+          </div>
+
+          <div class="space-y-4 pt-2">
+            <!-- 스켈레톤 아이템 1 -->
+            <div class="flex gap-3">
+              <div class="w-12 h-5 bg-slate-200 rounded-md shrink-0"></div>
+              <div class="flex-1 space-y-2 pb-3 border-b border-slate-100">
+                <div class="h-4 w-16 bg-slate-200 rounded-full"></div>
+                <div class="h-5 w-36 bg-slate-300 rounded-lg"></div>
+                <div class="h-4 w-full bg-slate-200 rounded-md"></div>
+              </div>
+            </div>
+            <!-- 스켈레톤 아이템 2 -->
+            <div class="flex gap-3">
+              <div class="w-12 h-5 bg-slate-200 rounded-md shrink-0"></div>
+              <div class="flex-1 space-y-2 pb-3 border-b border-slate-100">
+                <div class="h-4 w-16 bg-slate-200 rounded-full"></div>
+                <div class="h-5 w-40 bg-slate-300 rounded-lg"></div>
+                <div class="h-4 w-5/6 bg-slate-200 rounded-md"></div>
+              </div>
+            </div>
+            <!-- 스켈레톤 아이템 3 -->
+            <div class="flex gap-3">
+              <div class="w-12 h-5 bg-slate-200 rounded-md shrink-0"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-4 w-16 bg-slate-200 rounded-full"></div>
+                <div class="h-5 w-32 bg-slate-300 rounded-lg"></div>
+                <div class="h-4 w-4/5 bg-slate-200 rounded-md"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="text-center text-xs font-medium text-slate-400">AI가 최적의 동선과 장소를 구성하고 있어요...</p>
+      </section>
+
+      <!-- 3. 결과 일정 렌더링 섹션 (초기 숨김) -->
+      <section id="resultSection" class="hidden space-y-4 animate-fade-in-up">
+
+        <!-- 상단 상태 배지 및 여행 요약 카드 -->
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/70 space-y-3">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <!-- API 연동 상태 배지 -->
+            <span id="apiStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              예시 일정 미리보기 · /api/plan 미연동
+            </span>
+            <span id="resultDurationBadge" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+              1박 2일
+            </span>
+          </div>
+
+          <div>
+            <h2 id="resultTitle" class="text-lg font-extrabold text-slate-900 tracking-tight">강릉 맞춤 여행 코스</h2>
+            <p id="resultSummary" class="text-xs text-slate-500 mt-1 leading-relaxed">연인과 함께하는 푸른 동해바다 & 감성 카페 힐링 코스</p>
+          </div>
+
+          <!-- 선택된 조건 태그 요약 -->
+          <div id="resultMetaTags" class="flex flex-wrap gap-1.5 pt-1"></div>
+        </div>
+
+        <!-- Day 필터 탭 바 (가로 스크롤 지원) -->
+        <div class="sticky top-[61px] z-20 bg-slate-50/95 backdrop-blur-sm py-2 -mx-4 px-4">
+          <div id="dayFilterTabs" class="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <!-- JS에서 동적 생성 -->
+          </div>
+        </div>
+
+        <!-- 하루별 일정 카드 컨테이너 -->
+        <div id="itineraryCardsContainer" class="space-y-4">
+          <!-- JS에서 Day별 카드 동적 렌더링 -->
+        </div>
+
+        <!-- 결과 하단 액션 버튼 영역 -->
+        <div class="pt-2 space-y-2.5">
+          <button
+            type="button"
+            id="copyItineraryBtn"
+            class="w-full py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+            </svg>
+            <span>일정 텍스트 복사하기</span>
+          </button>
+
+          <button
+            type="button"
+            id="resetConditionsBtn"
+            class="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 active:scale-[0.99] text-slate-600 font-semibold text-sm border border-slate-200 flex items-center justify-center gap-1.5 transition-all"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            <span>조건 다시 설정하기</span>
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- 하단 토스트 메시지 (alert 대체) -->
+    <div
+      id="toastNotification"
+      role="status"
+      aria-live="polite"
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-[380px] pointer-events-none opacity-0 translate-y-3 transition-all duration-300"
+    >
+      <div class="bg-slate-900/95 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold">
+        <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="toastMessage">복사되었습니다.</span>
+      </div>
+    </div>
+
+    <!-- /api/plan 연동 가이드 모달 -->
+    <div
+      id="apiGuideModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalTitle"
+      class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4"
+    >
+      <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 max-h-[88vh] flex flex-col overflow-hidden animate-fade-in-up">
+        <!-- 모달 헤더 -->
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-extrabold">POST</span>
+            <h3 id="modalTitle" class="text-sm font-bold text-slate-900">/api/plan 백엔드 연동 스펙</h3>
+          </div>
+          <button
+            type="button"
+            id="closeGuideBtn"
+            aria-label="모달 닫기"
+            class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 모달 본문 -->
+        <div class="p-5 overflow-y-auto space-y-5 text-xs leading-relaxed">
+          <div class="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-3.5 text-indigo-900">
+            <p class="font-semibold mb-1">💡 동작 방식 안내</p>
+            <p class="text-[11px] text-indigo-700">
+              프론트엔드는 버튼 클릭 시 <code class="font-mono bg-white px-1.5 py-0.5 rounded border border-indigo-200">/api/plan</code>으로 아래 Request JSON을 전송합니다. Vercel Serverless Function에서 Gemini API 응답을 아래 Response JSON 구조로 반환하면 자동으로 화면에 반영됩니다.
+            </p>
+          </div>
+
+          <!-- Request JSON -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-800">1. Request Body (프론트엔드 → 백엔드)</span>
+              <button type="button" data-copy-target="reqJsonCode" class="copy-json-btn text-[11px] font-semibold text-indigo-600 hover:underline">복사</button>
+            </div>
+            <pre id="reqJsonCode" class="bg-slate-900 text-slate-100 p-3.5 rounded-2xl overflow-x-auto font-mono text-[11px] leading-relaxed">{
+  "destination": "강릉",
+  "duration": "1박 2일",
+  "companion": "연인",
+  "interests": ["맛집 탐방", "감성 카페"]
+}</pre>
+          </div>
+
+          <!-- Response JSON -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-800">2. Expected Response (Gemini → 프론트엔드)</span>
+              <button type="button" data-copy-target="resJsonCode" class="copy-json-btn text-[11px] font-semibold text-indigo-600 hover:underline">복사</button>
+            </div>
+            <pre id="resJsonCode" class="bg-slate-900 text-emerald-300 p-3.5 rounded-2xl overflow-x-auto font-mono text-[11px] leading-relaxed">{
+  "destination": "강릉",
+  "summary": "연인과 함께하는 동해바다 & 감성 카페 코스",
+  "days": [
+    {
+      "day": 1,
+      "theme": "에메랄드빛 해변 산책과 오션뷰 커피 타임",
+      "items": [
+        {
+          "time": "11:30",
+          "category": "맛집",
+          "place": "초당순두부마을",
+          "description": "고소한 짬뽕순두부와 모두부로 든든하게 시작하는 점심",
+          "tip": "12시 전 방문 시 대기 시간을 줄일 수 있어요."
+        },
+        {
+          "time": "14:00",
+          "category": "카페",
+          "place": "안목해변 커피거리",
+          "description": "파도 소리를 들으며 즐기는 핸드드립 오션뷰 카페",
+          "tip": "루프탑 좌석에서 바다를 배경으로 인생샷을 남겨보세요."
+        }
+      ]
+    }
+  ]
+}</pre>
+          </div>
+        </div>
+
+        <!-- 모달 하단 닫기 버튼 -->
+        <div class="p-4 border-t border-slate-100 bg-white">
+          <button
+            type="button"
+            id="modalConfirmBtn"
+            class="w-full py-3 rounded-2xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-colors"
+          >
+            확인했어요
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 애플리케이션 상태 관리 및 비즈니스 로직 -->
+  <script>
+    (function () {
+      'use strict';
+
+      // ==========================================
+      // 1. 앱 상태 (State) 정의
+      // ==========================================
+      const state = {
+        destination: '강릉',
+        duration: '1박 2일',
+        companion: '연인',
+        interests: ['맛집 탐방', '감성 카페'],
+        currentPlan: null,     // 현재 화면에 표시 중인 일정 데이터
+        isMockFallback: true,  // true: 예시 일정 / false: 실제 /api/plan 응답
+        selectedDayFilter: 'all' // 'all' 또는 1, 2, 3, 4
+      };
+
+      // ==========================================
+      // 2. DOM 요소 캐싱
+      // ==========================================
+      const els = {
+        destinationInput: document.getElementById('destinationInput'),
+        destinationInputWrapper: document.getElementById('destinationInputWrapper'),
+        clearDestinationBtn: document.getElementById('clearDestinationBtn'),
+        destinationChips: document.getElementById('destinationChips'),
+        durationGroup: document.getElementById('durationGroup'),
+        companionGroup: document.getElementById('companionGroup'),
+        interestChips: document.getElementById('interestChips'),
+        interestCountBadge: document.getElementById('interestCountBadge'),
+        customInterestInput: document.getElementById('customInterestInput'),
+        addInterestBtn: document.getElementById('addInterestBtn'),
+        generateBtn: document.getElementById('generateBtn'),
+        loadingSection: document.getElementById('loadingSection'),
+        resultSection: document.getElementById('resultSection'),
+        apiStatusBadge: document.getElementById('apiStatusBadge'),
+        resultDurationBadge: document.getElementById('resultDurationBadge'),
+        resultTitle: document.getElementById('resultTitle'),
+        resultSummary: document.getElementById('resultSummary'),
+        resultMetaTags: document.getElementById('resultMetaTags'),
+        dayFilterTabs: document.getElementById('dayFilterTabs'),
+        itineraryCardsContainer: document.getElementById('itineraryCardsContainer'),
+        copyItineraryBtn: document.getElementById('copyItineraryBtn'),
+        resetConditionsBtn: document.getElementById('resetConditionsBtn'),
+        toastNotification: document.getElementById('toastNotification'),
+        toastMessage: document.getElementById('toastMessage'),
+        apiGuideModal: document.getElementById('apiGuideModal'),
+        openGuideBtn: document.getElementById('openGuideBtn'),
+        closeGuideBtn: document.getElementById('closeGuideBtn'),
+        modalConfirmBtn: document.getElementById('modalConfirmBtn')
+      };
+
+      let toastTimer = null;
+
+      // ==========================================
+      // 3. 유틸리티 함수 (토스트 알림, 클립보드 복사)
+      // ==========================================
+      function showToast(message) {
+        els.toastMessage.textContent = message;
+        els.toastNotification.classList.remove('opacity-0', 'translate-y-3');
+        els.toastNotification.classList.add('opacity-100', 'translate-y-0');
+
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          els.toastNotification.classList.remove('opacity-100', 'translate-y-0');
+          els.toastNotification.classList.add('opacity-0', 'translate-y-3');
+        }, 2600);
+      }
+
+      // iFrame 환경에서도 안정적으로 작동하는 execCommand 기반 복사 함수
+      function copyTextToClipboard(text, successMessage) {
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          textarea.style.top = '0';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textarea);
+
+          if (successful) {
+            showToast(successMessage);
+          } else {
+            showToast('복사에 실패했습니다. 다시 시도해주세요.');
+          }
+        } catch (err) {
+          console.error('Clipboard copy error:', err);
+          showToast('복사 중 오류가 발생했습니다.');
+        }
+      }
+
+      // ==========================================
+      // 4. 입력 폼 인터랙션 핸들러
+      // ==========================================
+
+      // 추천 여행지 칩 동기화
+      function syncDestinationChips() {
+        const currentVal = els.destinationInput.value.trim();
+        state.destination = currentVal;
+
+        els.destinationChips.querySelectorAll('.dest-chip').forEach((chip) => {
+          const isMatch = chip.dataset.dest === currentVal;
+          if (isMatch) {
+            chip.className = 'dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-indigo-600 text-white border-indigo-600 shadow-sm';
+          } else {
+            chip.className = 'dest-chip px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50';
+          }
+        });
+      }
+
+      els.destinationInput.addEventListener('input', syncDestinationChips);
+
+      els.clearDestinationBtn.addEventListener('click', () => {
+        els.destinationInput.value = '';
+        syncDestinationChips();
+        els.destinationInput.focus();
+      });
+
+      els.destinationChips.addEventListener('click', (e) => {
+        const chip = e.target.closest('.dest-chip');
+        if (!chip) return;
+        els.destinationInput.value = chip.dataset.dest;
+        syncDestinationChips();
+      });
+
+      // 여행 기간 단일 선택
+      els.durationGroup.addEventListener('click', (e) => {
+        const btn = e.target.closest('.duration-btn');
+        if (!btn) return;
+        state.duration = btn.dataset.duration;
+
+        els.durationGroup.querySelectorAll('.duration-btn').forEach((item) => {
+          if (item === btn) {
+            item.className = 'duration-btn py-3 px-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 bg-indigo-600 text-white border-indigo-600 shadow-sm';
+          } else {
+            item.className = 'duration-btn py-3 px-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50';
+          }
+        });
+      });
+
+      // 동행 단일 선택
+      els.companionGroup.addEventListener('click', (e) => {
+        const chip = e.target.closest('.companion-chip');
+        if (!chip) return;
+        state.companion = chip.dataset.companion;
+
+        els.companionGroup.querySelectorAll('.companion-chip').forEach((item) => {
+          if (item === chip) {
+            item.className = 'companion-chip py-2.5 px-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-indigo-600 text-white border-indigo-600 shadow-sm';
+          } else {
+            item.className = 'companion-chip py-2.5 px-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50';
+          }
+        });
+      });
+
+      // 관심사 카운트 배지 업데이트
+      function updateInterestBadge() {
+        els.interestCountBadge.textContent = `${state.interests.length}개 선택됨`;
+      }
+
+      // 관심사 칩 토글
+      els.interestChips.addEventListener('click', (e) => {
+        const chip = e.target.closest('.interest-chip');
+        if (!chip) return;
+        const interest = chip.dataset.interest;
+        const idx = state.interests.indexOf(interest);
+
+        if (idx > -1) {
+          state.interests.splice(idx, 1);
+          chip.className = 'interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-white text-slate-600 border-slate-200 hover:bg-slate-50';
+        } else {
+          state.interests.push(interest);
+          chip.className = 'interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-indigo-50 text-indigo-700 border-indigo-300';
+        }
+        updateInterestBadge();
+      });
+
+      // 사용자 정의 관심사 추가
+      function addCustomInterest() {
+        const raw = els.customInterestInput.value.trim();
+        if (!raw) return;
+
+        // 중복 확인
+        if (state.interests.includes(raw)) {
+          showToast(`'${raw}' 관심사는 이미 선택되어 있어요.`);
+          els.customInterestInput.value = '';
+          return;
+        }
+
+        // 기존 칩 중 동일한 이름이 있으면 활성화
+        const existingChip = Array.from(els.interestChips.querySelectorAll('.interest-chip'))
+          .find((c) => c.dataset.interest === raw);
+
+        if (existingChip) {
+          existingChip.click();
+          els.customInterestInput.value = '';
+          return;
+        }
+
+        // 새 커스텀 칩 생성 및 선택 처리
+        state.interests.push(raw);
+        const newChip = document.createElement('button');
+        newChip.type = 'button';
+        newChip.dataset.interest = raw;
+        newChip.className = 'interest-chip px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all active:scale-95 bg-indigo-50 text-indigo-700 border-indigo-300';
+        newChip.textContent = raw;
+        els.interestChips.appendChild(newChip);
+
+        els.customInterestInput.value = '';
+        updateInterestBadge();
+        showToast(`'${raw}' 관심사가 추가되었어요.`);
+      }
+
+      els.addInterestBtn.addEventListener('click', addCustomInterest);
+      els.customInterestInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addCustomInterest();
+        }
+      });
+
+      // ==========================================
+      // 5. Fallback 예시 일정 데이터 엔진 (한국어 현실 코스)
+      // ==========================================
+      const PRESET_DESTINATIONS = {
+        '강릉': [
+          {
+            theme: '에메랄드빛 동해바다 산책과 초당 미식 투어',
+            items: [
+              { time: '11:30', category: '맛집', place: '초당순두부마을', description: '고소한 짬뽕순두부와 몽글몽글한 초당순두부 전골로 시작하는 첫 끼', tip: '점심 피크타임(12시) 직전에 도착하면 웨이팅을 크게 줄일 수 있어요.' },
+              { time: '13:30', category: '자연/힐링', place: '경포호 & 경포해변', description: '소나무 숲길과 탁 트인 동해 수평선을 따라 걷는 여유로운 산책', tip: '호수 주변 2인용 자전거나 전동 바이크를 대여해 한 바퀴 돌아보는 것도 좋아요.' },
+              { time: '15:30', category: '카페', place: '안목해변 커피거리', description: '파도 소리가 바로 눈앞에 펼쳐지는 오션뷰 로스터리 카페 타임', tip: '해 질 녘 창가나 루프탑 자리에 앉아 바다 윤슬을 감상해보세요.' },
+              { time: '18:30', category: '맛집', place: '강릉중앙시장 & 월화거리', description: '닭강정, 어묵고로케, 회 포장 등 활기찬 전통시장 먹거리 탐방', tip: '시장 공영주차장을 이용하면 편리하며, 저녁 야시장 분위기도 활기찹니다.' }
+            ]
+          },
+          {
+            theme: '예술적 영감과 파도 부채길을 걷는 감성 코스',
+            items: [
+              { time: '10:00', category: '문화/전시', place: '하슬라아트월드', description: '동해를 품은 복합예술공간에서 만나는 야외 조각공원과 현대미술관', tip: '동그란 원형 프레임 포토존은 줄이 길 수 있으니 오전 방문을 추천해요.' },
+              { time: '12:30', category: '맛집', place: '정동진 물회 & 생선구이 거리', description: '제철 활어 물회와 숯불에 노릇하게 구운 모듬 생선구이 점심', tip: '시원한 살얼음 물회에 소면과 밥을 순서대로 말아 드셔보세요.' },
+              { time: '14:30', category: '자연/힐링', place: '정동심곡 바다부채길', description: '천연기념물 해안단구 절벽 위 데크를 따라 걷는 짜릿한 해안 트레킹', tip: '기상 악화 시 통제될 수 있으니 방문 전 운영 여부를 확인하면 좋아요.' },
+              { time: '17:00', category: '카페', place: '사천해변 감성 베이커리 카페', description: '집으로 돌아가기 전, 한적한 사천 바다를 보며 즐기는 디저트 휴식', tip: '강릉 시내보다 한결 조용해서 여행을 마무리하며 대화 나누기 좋습니다.' }
+            ]
+          },
+          {
+            theme: '대관령 목장의 초원과 강릉 구도심 골목 산책',
+            items: [
+              { time: '10:30', category: '자연/힐링', place: '대관령 양떼목장', description: '탁 트인 능선 위 초원과 순한 양들을 만나는 힐링 목장 산책', tip: '산간 지역이라 시내보다 기온이 낮으니 가벼운 겉옷을 챙겨주세요.' },
+              { time: '13:30', category: '맛집', place: '교동 장칼국수 노포', description: '진하고 칼칼한 고추장 육수가 일품인 강릉 로컬 소울푸드', tip: '감자옹심이도 함께 주문해 쫄깃한 식감을 비교해보세요.' },
+              { time: '15:30', category: '인생샷', place: '강릉 명주동 골목 & 작은 책방', description: '오래된 적산가옥과 감각적인 소품샵, 독립서점이 어우러진 골목', tip: '골목 곳곳에 숨은 예쁜 간판과 벽화 앞에서 자연스러운 스냅을 찍어보세요.' },
+              { time: '19:00', category: '야경/드라이브', place: '강문해변 솟대다리 야경', description: '밤바다를 수놓는 무지개빛 조명 다리와 잔잔한 파도 소리', tip: '식사 후 가볍게 소화시키며 밤바다 산책하기 완벽한 코스입니다.' }
+            ]
+          },
+          {
+            theme: '숲속 피톤치드와 여유로운 브런치 마무리',
+            items: [
+              { time: '10:30', category: '카페', place: '솔향수목원 인근 숲속 카페', description: '울창한 금강소나무 숲 향기를 맡으며 즐기는 모닝 커피와 브런치', tip: '아침 햇살이 나무 사이로 들어오는 오전 시간대가 가장 아름답습니다.' },
+              { time: '12:30', category: '자연/힐링', place: '오죽헌 & 선교장', description: '고즈넉한 한옥 고택과 대나무 숲길이 주는 차분한 전통의 미', tip: '선교장 활래정 연못 주변에서 고풍스러운 산책을 즐겨보세요.' },
+              { time: '14:30', category: '맛집', place: '강릉 짬뽕빵 & 수제버거', description: '강릉에서만 맛볼 수 있는 이색 베이커리와 수제버거로 가벼운 점심', tip: '기념품으로 가져갈 수 있도록 개별 포장된 디저트 세트도 인기예요.' }
+            ]
+          }
+        ],
+        '제주도': [
+          {
+            theme: '에메랄드빛 애월 해안도로와 오름 산책',
+            items: [
+              { time: '11:00', category: '맛집', place: '애월 고기국수 & 돔베고기', description: '진하게 우려낸 사골 육수 고기국수와 부드러운 수육 한 상', tip: '공항에서 서쪽으로 이동하는 길목에 있어 첫 식사로 동선이 완벽해요.' },
+              { time: '13:00', category: '카페', place: '애월 한담해안산책로 오션뷰 카페', description: '투명한 옥빛 바다와 검은 현무암이 어우러진 제주 대표 카페 거리', tip: '해안 산책로를 먼저 20분 정도 걸은 뒤 카페에 들어가면 더욱 상쾌해요.' },
+              { time: '15:30', category: '자연/힐링', place: '새별오름', description: '완만한 능선을 따라 올라 한라산과 서쪽 바다를 한눈에 담는 오름', tip: '경사가 살짝 있으니 편한 운동화를 착용하고 물 한 병을 챙겨주세요.' },
+              { time: '18:30', category: '맛집', place: '협재 흑돼지 근고기 전문점', description: '두툼한 제주산 흑돼지를 멜젓에 찍어 먹는 든든한 저녁 만찬', tip: '직원분이 직접 구워주는 곳을 선택하면 편하게 식사에 집중할 수 있어요.' }
+            ]
+          },
+          {
+            theme: '제주의 푸른 숲길과 성산 일출봉 절경',
+            items: [
+              { time: '10:00', category: '자연/힐링', place: '사려니숲길', description: '삼나무와 편백나무가 뿜어내는 피톤치드 가득한 숲속 트레킹', tip: '붉은오름 입구 코스로 걸으면 평탄해서 누구나 부담 없이 걷기 좋아요.' },
+              { time: '12:30', category: '맛집', place: '성산 갈치조림 & 성게미역국', description: '매콤달콤한 통갈치조림과 바다 향 가득한 보말·성게미역국', tip: '창가 좌석에서 성산일출봉이 보이는 식당을 미리 확인해보세요.' },
+              { time: '14:30', category: '인생샷', place: '섭지코지 & 성산일출봉', description: '푸른 초원 언덕과 웅장한 화산 분화구가 빚어내는 압도적인 풍경', tip: '바닷바람이 강할 수 있으니 모자나 머리카락 정리에 유의하세요.' },
+              { time: '17:00', category: '카페', place: '구좌 당근케이크 감성 카페', description: '제주 구좌읍 특산물 당근으로 만든 촉촉한 케이크와 핸드드립 커피', tip: '돌담과 감귤밭 뷰가 어우러진 야외 정원 좌석이 인기입니다.' }
+            ]
+          },
+          {
+            theme: '중문 주상절리와 서귀포 예술·야시장 투어',
+            items: [
+              { time: '10:30', category: '자연/힐링', place: '중문 대포주상절리대', description: '거대한 육각형 돌기둥 절벽에 부서지는 하얀 파도의 장관', tip: '햇빛이 정면으로 비추는 오전 시간대에 바다 색감이 가장 선명해요.' },
+              { time: '13:00', category: '맛집', place: '서귀포 흑돼지 돈가스 & 딱새우 파스타', description: '바삭한 제주 흑돼지 카츠와 달큰한 딱새우 로제 파스타', tip: '인기 맛집은 테이블링 원격 줄서기를 미리 활용하면 시간을 아낄 수 있어요.' },
+              { time: '15:00', category: '문화/전시', place: '포도뮤지엄 또는 본태박물관', description: '자연과 건축, 현대미술이 완벽하게 조화를 이루는 제주 예술 공간', tip: '전시 관람 후 뮤지엄 카페에서 바라보는 산방산 풍경도 놓치지 마세요.' },
+              { time: '18:30', category: '야경/드라이브', place: '서귀포 매일올레시장 & 새연교 야경', description: '흑돼지 꼬치, 오메기떡 먹방 후 조명이 켜진 새연교 밤산책', tip: '새연교 야간 조명은 밤 10시경 소등되니 저녁 식사 후 바로 들러보세요.' }
+            ]
+          },
+          {
+            theme: '용담 해안도로 드라이브와 동문시장 기념품 쇼핑',
+            items: [
+              { time: '10:30', category: '야경/드라이브', place: '용담~이호테우 해안도로', description: '빨간 말 등대와 비행기 이착륙 풍경이 어우러진 공항 근처 드라이브', tip: '해안도로 중간 공영주차장에 잠시 정차해 탁 트인 바다를 감상해보세요.' },
+              { time: '12:30', category: '맛집', place: '제주시 전복돌솥밥 & 옥돔구이', description: '고소한 전복 내장밥에 누룽지 숭늉까지 즐길 수 있는 정갈한 한식', tip: '공항 이동 15분 거리라 마지막 날 점심으로 부담이 없습니다.' },
+              { time: '14:30', category: '카페', place: '동문재래시장 & 마음샌드 픽업', description: '한라봉 주스 한 잔과 함께 소중한 사람들을 위한 제주 기념품 구매', tip: '공항 면세점 및 픽업 데스크 시간을 고려해 여유 있게 이동하세요.' }
+            ]
+          }
+        ],
+        '부산': [
+          {
+            theme: '해운대 블루라인파크와 광안리 야경 로맨스',
+            items: [
+              { time: '11:30', category: '맛집', place: '해운대 돼지국밥 & 수육백반', description: '잡내 없이 깔끔하고 진한 국물의 부산 대표 로컬 소울푸드', tip: '부추무침과 새우젓으로 간을 맞추고 다대기는 취향껏 조절하세요.' },
+              { time: '13:30', category: '액티비티', place: '해운대 블루라인파크 해변열차', description: '미포에서 청사포, 송정까지 동해 바다를 끼고 달리는 낭만 열차', tip: '스카이캡슐과 해변열차는 최소 1~2주 전 온라인 사전 예매를 권장해요.' },
+              { time: '16:00', category: '카페', place: '청사포 오션뷰 루프탑 카페', description: '빨간 등대와 지나가는 해변열차를 내려다보며 즐기는 디저트 타임', tip: '청사포 다릿돌 전망대까지 도보 5분 거리라 함께 둘러보기 좋습니다.' },
+              { time: '19:30', category: '야경/드라이브', place: '광안리 해수욕장 & 광안대교 야경', description: '밤바다 위로 화려하게 빛나는 광안대교와 버스킹이 어우러진 부산의 밤', tip: '토요일 밤 방문 시 광안리 M 드론라이트쇼 공연 시간을 미리 체크해보세요.' }
+            ]
+          },
+          {
+            theme: '영도 흰여울문화마을과 남포동 먹거리 투어',
+            items: [
+              { time: '10:30', category: '인생샷', place: '영도 흰여울문화마을', description: '깎아지른 해안 절벽 위 아기자기한 골목과 푸른 바다가 만나는 산토리니 감성', tip: '해안터널 포토존에서 바다를 배경으로 실루엣 사진을 남겨보세요.' },
+              { time: '13:00', category: '맛집', place: '남포동 자갈치시장 & 꼼장어/생선구이', description: '활기찬 부산 항구의 정취 속에서 즐기는 신선한 해산물 만찬', tip: '식사 후 바로 옆 BIFF 광장에서 씨앗호떡 디저트를 꼭 맛보세요.' },
+              { time: '15:30', category: '문화/전시', place: '영도 피아크(P.ARK) 복합문화공간', description: '초대형 조선소 뷰 베이커리 카페와 감각적인 전시·팝업스토어 구경', tip: '통유리창 너머로 보이는 부산항대교와 대형 선박 뷰가 압도적입니다.' },
+              { time: '18:30', category: '야경/드라이브', place: '천마산 하늘전망대 야경', description: '부산항과 영도, 산복도로의 불빛이 파노라마처럼 펼쳐지는 숨은 야경 명소', tip: '해 질 녘 매직아워 시간에 맞춰 올라가면 노을과 야경을 동시에 볼 수 있어요.' }
+            ]
+          },
+          {
+            theme: '전포 카페거리 트렌디 산책과 기장 오션뷰 힐링',
+            items: [
+              { time: '11:30', category: '맛집', place: '서면 전포동 밀면 & 만두', description: '살얼음 동동 띄운 시원한 물밀면과 매콤달콤 비빔밀면, 왕만두 조합', tip: '따뜻한 온육수를 먼저 한 컵 마시면 입맛이 확 살아납니다.' },
+              { time: '13:30', category: '카페', place: '전포 카페거리 & 소품샵 투어', description: '개성 넘치는 스페셜티 로스터리 카페와 아기자기한 빈티지 샵 탐방', tip: '골목마다 숨어 있는 디저트 맛집(휘낭시에, 푸딩)을 1~2곳 정해 들러보세요.' },
+              { time: '16:30', category: '자연/힐링', place: '기장 해동용궁사', description: '바다 바로 위 갯바위에 세워진 웅장하고 신비로운 해안 사찰', tip: '계단이 많으니 편한 신발을 신고, 소원 성취 동전 던지기 체험도 해보세요.' }
+            ]
+          },
+          {
+            theme: '송도 해상케이블카와 여유로운 브런치 마무리',
+            items: [
+              { time: '10:30', category: '액티비티', place: '송도 해상케이블카', description: '바다 위 86m 상공을 가로지르며 암남공원과 남항대교를 조망하는 코스', tip: '바닥이 투명한 크리스탈 크루즈를 타면 발아래 푸른 바다가 생생하게 보여요.' },
+              { time: '13:00', category: '맛집', place: '부산역 인근 완당 & 유부전골', description: '70년 전통의 부드러운 완당과 따끈한 어묵 유부전골로 속 편한 마무리', tip: 'KTX 탑승 전 부산역까지 도보/택시 10분 거리라 이동이 매우 수월합니다.' }
+            ]
+          }
+        ],
+        '서울': [
+          {
+            theme: '고궁의 고즈넉함과 북촌·서촌 감성 골목 산책',
+            items: [
+              { time: '10:30', category: '문화/전시', place: '경복궁 & 국립현대미술관 서울관', description: '웅장한 조선의 법궁 산책과 바로 맞은편 현대미술관 전시 관람', tip: '한복을 착용하면 경복궁 무료입장이 가능하며 고궁 스냅 찍기에도 좋아요.' },
+              { time: '13:00', category: '맛집', place: '서촌 통인시장 & 들기름 막국수', description: '고소한 들기름 막국수와 바삭한 감자전으로 즐기는 정갈한 한 끼', tip: '점심시간에는 웨이팅이 잦으니 오픈 시간 직후 방문을 추천합니다.' },
+              { time: '15:00', category: '카페', place: '북촌 한옥마을 & 안국역 한옥 카페', description: '기와지붕과 돌담길이 어우러진 한옥 개조 카페에서 즐기는 말차와 다과', tip: '북촌 주민들의 실제 거주 공간이므로 조용히 매너 있는 관람을 부탁드려요.' },
+              { time: '19:00', category: '야경/드라이브', place: '남산서울타워 & 남산공원 산책길', description: '서울 도심의 화려한 스카이라인이 360도로 펼쳐지는 야경 명소', tip: '남산 케이블카나 순환 전기버스를 이용하면 편하게 정상까지 오를 수 있어요.' }
+            ]
+          },
+          {
+            theme: '성수동 트렌드 팝업스토어와 서울숲 피크닉',
+            items: [
+              { time: '11:30', category: '맛집', place: '성수동 연무장길 퓨전 양식/한식 다이닝', description: '감각적인 인테리어와 플레이팅이 돋보이는 성수 핫플레이스 런치', tip: '캐치테이블 등 예약 앱을 통해 미리 방문 예약을 걸어두면 편리해요.' },
+              { time: '13:30', category: '액티비티', place: '성수동 플래그십 & 팝업스토어 투어', description: '패션, 뷰티, 라이프스타일 브랜드의 최신 트렌드를 체험하는 거리 산책', tip: '주말에는 현장 대기 등록이 조기 마감될 수 있으니 원하는 브랜드부터 들르세요.' },
+              { time: '16:00', category: '자연/힐링', place: '서울숲 공원 산책', description: '울창한 은행나무 숲과 사슴 방사장, 거울연못을 따라 걷는 도심 속 오아시스', tip: '인근 베이커리에서 빵과 커피를 테이크아웃해 벤치에서 여유를 즐겨보세요.' },
+              { time: '19:00', category: '야경/드라이브', place: '뚝섬한강공원 야경 & 라면 피크닉', description: '한강 야경과 청담대교 불빛을 바라보며 즐기는 한강 편의점 라면과 치킨', tip: '강바람이 선선할 수 있으니 가벼운 바람막이나 돗자리를 준비하면 좋아요.' }
+            ]
+          },
+          {
+            theme: '한남동 예술 산책과 이태원·해방촌 루프탑 뷰',
+            items: [
+              { time: '11:00', category: '문화/전시', place: '리움미술관', description: '한국 고미술의 정수부터 세계적인 현대미술까지 만나는 서울 대표 미술관', tip: '관람일 14일 전부터 홈페이지에서 사전 예매가 필수입니다.' },
+              { time: '13:30', category: '맛집', place: '한남동 브런치 & 수제버거', description: '이국적인 골목 분위기 속에서 즐기는 육즙 가득 수제버거와 브런치', tip: '식사 후 한남동 편집샵 골목을 따라 천천히 언덕길을 구경해보세요.' },
+              { time: '16:30', category: '카페', place: '해방촌 신흥시장 루프탑 카페', description: '남산타워가 바로 눈앞에 잡힐 듯 보이는 해방촌 감성 루프탑', tip: '노을이 지는 오후 5시 무렵 방문하면 붉게 물드는 서울 하늘을 볼 수 있어요.' }
+            ]
+          },
+          {
+            theme: '익선동 레트로 골목과 광장시장 미식 투어',
+            items: [
+              { time: '11:30', category: '맛집', place: '광장시장 빈대떡 & 육회 골목', description: '바삭하게 부쳐낸 녹두빈대떡과 신선한 육회, 마약김밥까지 시장 미식 풀코스', tip: '현금이나 계좌이체를 준비하면 전통시장 노점에서 훨씬 빠르게 결제할 수 있어요.' },
+              { time: '14:00', category: '인생샷', place: '익선동 한옥거리 & 낙원상가', description: '1920년대 개량 한옥 골목에 들어선 레트로 찻집과 오락실, 포토부스', tip: '평일 오후나 이른 주말 오후에 방문하면 골목 사진을 예쁘게 찍기 좋아요.' }
+            ]
+          }
+        ],
+        '도쿄': [
+          {
+            theme: '아사쿠사 전통 거리와 도쿄 스카이트리 야경',
+            items: [
+              { time: '10:30', category: '문화/전시', place: '아사쿠사 센소지 & 나카미세 도리', description: '거대한 붉은 등불 카미나리몬을 지나 전통 간식과 기념품을 즐기는 도쿄 명소', tip: '오전 10시 이전에 도착하면 인파가 적어 정문 앞에서 깔끔한 인증샷을 남길 수 있어요.' },
+              { time: '13:00', category: '맛집', place: '아사쿠사 장어덮밥(우나쥬) 또는 텐동 노포', description: '특제 타레 소스를 발라 숯불에 구운 부드러운 장어덮밥과 바삭한 튀김덮밥', tip: '인기 노포는 오픈 20분 전부터 줄이 생기니 조금 서둘러 방문해보세요.' },
+              { time: '15:30', category: '카페', place: '쿠라마에 감성 로스터리 카페 거리', description: '도쿄의 브루클린이라 불리는 쿠라마에의 세련된 창고 개조 스페셜티 카페', tip: '스미다강 강변 산책로를 따라 도보 15분이면 아사쿠사에서 이동 가능합니다.' },
+              { time: '18:30', category: '야경/드라이브', place: '도쿄 스카이트리 & 소라마치 전망대', description: '634m 높이에서 도쿄 도심과 도쿄만의 반짝이는 야경을 한눈에 담는 시간', tip: '일몰 30분 전 입장권을 예매하면 낮과 노을, 야경까지 한 번에 감상할 수 있어요.' }
+            ]
+          },
+          {
+            theme: '시부야 스카이와 오모테산도·하라주쿠 트렌드 투어',
+            items: [
+              { time: '10:30', category: '자연/힐링', place: '메이지 신궁 & 요요기 공원', description: '도심 한가운데 울창한 거목 숲길을 걸으며 만나는 고요한 힐링 산책', tip: '자갈길이 이어지므로 발이 편한 스니커즈를 착용하는 것을 추천합니다.' },
+              { time: '13:00', category: '맛집', place: '하라주쿠 규카츠 & 돈코츠 라멘', description: '겉은 바삭하고 속은 촉촉하게 구워 먹는 규카츠와 진한 국물의 정통 라멘', tip: '피크타임 대기를 피하려면 오후 1시 30분 이후 방문이 한결 여유로워요.' },
+              { time: '15:30', category: '카페', place: '오모테산도 & 아오야마 건축 카페', description: '세계적인 건축가들이 설계한 명품 거리와 골목 속 감성 디저트 카페', tip: '오모테산도 힐즈와 캣스트리트 편집샵을 함께 둘러보면 쇼핑 동선이 완벽해요.' },
+              { time: '18:30', category: '인생샷', place: '시부야 스크램블 교차로 & 시부야 스카이', description: '세계에서 가장 붐비는 교차로의 역동적인 풍경과 360도 오픈 루프탑 야경', tip: '시부야 스카이 골든타임(일몰 시간대) 티켓은 4주 전 오픈 즉시 예매해야 합니다.' }
+            ]
+          },
+          {
+            theme: '나카메구로 운하 산책과 다이칸야마 라이프스타일',
+            items: [
+              { time: '11:00', category: '카페', place: '나카메구로 메구로강변 카페 & 스타벅스 리저브 로스터리', description: '잔잔한 운하를 따라 늘어진 가로수와 4층 규모의 압도적인 로스터리 공간', tip: '입장 대기 번호표를 먼저 뽑은 뒤 강변 소품샵을 구경하면 시간을 알차게 쓸 수 있어요.' },
+              { time: '13:30', category: '맛집', place: '다이칸야마 함바그 & 퓨전 일식 런치', description: '세련된 주택가 골목에서 즐기는 육즙 가득한 수제 함바그 스테이크', tip: '나카메구로에서 다이칸야마까지는 완만한 언덕길로 도보 10분 거리입니다.' },
+              { time: '15:30', category: '문화/전시', place: '다이칸야마 츠타야 티사이트(T-SITE)', description: '숲속 도서관 같은 건축미와 감각적인 서적, 음반, 문구류가 가득한 복합문화공간', tip: '2층 라운지 바에서 여유롭게 잡지와 아트북을 구경하며 쉬어가세요.' }
+            ]
+          },
+          {
+            theme: '긴자 쇼핑 스트리트와 도쿄역 야경 마무리',
+            items: [
+              { time: '11:00', category: '맛집', place: '츠키지 장외시장 스시 & 해산물 덮밥(카이센동)', description: '신선한 참치와 성게알이 듬뿍 올라간 카이센동과 달달한 일본식 계란말이', tip: '오전 시간대에 방문해야 신선한 재료가 소진되기 전에 다양한 메뉴를 맛볼 수 있어요.' },
+              { time: '14:00', category: '카페', place: '긴자 식스(GINZA SIX) & 전통 화과자 찻집', description: '세련된 플래그십 쇼핑과 100년 전통 찻집에서 즐기는 진한 말차 디저트', tip: '주말 오후 긴자 중앙대로는 차 없는 거리(보행자 천국)로 운영되어 산책하기 좋아요.' },
+              { time: '17:30', category: '야경/드라이브', place: '도쿄역 마루노우치 붉은 벽돌 역사 야경', description: '황금빛 조명이 켜진 클래식한 도쿄역사와 마루노우치 빌딩 광장 산책', tip: '공항 리무진 버스나 나리타 익스프레스(N’EX) 탑승 전 마지막 인증샷 명소입니다.' }
+            ]
+          }
+        ]
+      };
+
+      // 기간 문자열을 일수(1~4)로 변환
+      function getDaysCount(duration) {
+        if (duration === '당일치기') return 1;
+        if (duration === '1박 2일') return 2;
+        if (duration === '2박 3일') return 3;
+        if (duration === '3박 4일') return 4;
+        return 2;
+      }
+
+      // 임의의 여행지 입력 시에도 현실적인 한국어 일정을 생성하는 동적 빌더
+      function buildDynamicFallbackPlan(destination, duration, companion, interests) {
+        const dayCount = getDaysCount(duration);
+        const safeInterests = interests.length > 0 ? interests : ['맛집 탐방', '감성 카페'];
+
+        // 동행에 따른 톤앤매너 문구
+        const companionTone = {
+          '혼자서': '온전히 나만의 속도로 사색하고 즐기는',
+          '연인': '로맨틱한 분위기와 인생샷이 가득한',
+          '친구들과': '에너지 넘치고 다채로운 먹거리·놀거리가 가득한',
+          '가족과': '남녀노소 모두가 편안하고 만족할 수 있는'
+        }[companion] || '취향을 가득 담은';
+
+        // 프리셋 도시가 있는 경우 활용
+        const presetKey = Object.keys(PRESET_DESTINATIONS).find(
+          (key) => destination.includes(key) || key.includes(destination)
+        );
+
+        const days = [];
+
+        if (presetKey) {
+          const presetDays = PRESET_DESTINATIONS[presetKey];
+          for (let i = 0; i < dayCount; i++) {
+            const template = presetDays[i % presetDays.length];
+            const items = JSON.parse(JSON.stringify(template.items));
+
+            // 당일치기인 경우 마지막 아이템에 귀가 팁 보강
+            if (dayCount === 1 && items.length > 0) {
+              items[items.length - 1].tip += ' (당일치기 일정이므로 막차/귀가 교통편 시간을 미리 확인해 주세요!)';
+            }
+
+            days.push({
+              day: i + 1,
+              theme: template.theme,
+              items
+            });
+          }
+        } else {
+          // 사용자 직접 입력 도시(경주, 여수, 전주, 속초, 오사카 등)를 위한 지능형 동적 템플릿
+          const dayThemes = [
+            `${destination} 핵심 랜드마크와 로컬 미식 첫날 코스`,
+            `${destination}의 숨은 감성 골목과 자연 힐링 산책`,
+            `여유로운 브런치와 ${destination} 명소 깊이 보기`,
+            `${destination}의 아쉬움을 달래는 기념품 & 미식 마무리`
+          ];
+
+          for (let d = 0; d < dayCount; d++) {
+            const items = [];
+
+            // 11:00 점심 맛집
+            items.push({
+              time: '11:30',
+              category: '맛집',
+              place: `${destination} 대표 로컬 맛집 거리`,
+              description: `${destination}에 오면 꼭 먹어야 할 향토 대표 메뉴로 든든하게 시작하는 점심`,
+              tip: `${companion} 함께 방문하기 좋은 깔끔한 좌석과 웨이팅 시간을 고려해 12시 전 방문을 추천해요.`
+            });
+
+            // 14:00 관심사 기반 핵심 코스 1
+            const primaryInterest = safeInterests[d % safeInterests.length];
+            if (primaryInterest === '자연/힐링') {
+              items.push({
+                time: '14:00',
+                category: '자연/힐링',
+                place: `${destination} 대표 산책길 & 전망 명소`,
+                description: `탁 트인 자연 풍경을 바라보며 천천히 걸을 수 있는 ${destination}의 힐링 스팟`,
+                tip: '편한 운동화를 신고 가벼운 겉옷을 챙기면 더욱 쾌적하게 산책할 수 있어요.'
+              });
+            } else if (primaryInterest === '액티비티') {
+              items.push({
+                time: '14:00',
+                category: '액티비티',
+                place: `${destination} 체험 & 레저 액티비티 존`,
+                description: `${companion} 함께 짜릿한 추억과 활력을 채울 수 있는 인기 체험 프로그램`,
+                tip: '주말 및 성수기에는 현장 매진이 잦으므로 온라인 사전 예약을 권장합니다.'
+              });
+            } else if (primaryInterest === '문화/전시') {
+              items.push({
+                time: '14:00',
+                category: '문화/전시',
+                place: `${destination} 시립미술관 & 역사문화관`,
+                description: `${destination}만의 고유한 역사와 예술적 감성을 깊이 느낄 수 있는 전시 관람`,
+                tip: '도슨트 해설 시간이나 오디오 가이드를 활용하면 작품 감상이 훨씬 풍성해집니다.'
+              });
+            } else {
+              items.push({
+                time: '14:00',
+                category: '인생샷',
+                place: `${destination} 랜드마크 포토 스팟`,
+                description: `${destination}의 상징적인 풍경을 배경으로 특별한 인증샷을 남기는 필수 코스`,
+                tip: '자연광이 부드럽게 들어오는 오후 2~4시 사이가 사진 색감이 가장 예쁘게 나와요.'
+              });
+            }
+
+            // 16:00 감성 카페
+            items.push({
+              time: '16:00',
+              category: '카페',
+              place: `${destination} 뷰 맛집 감성 카페`,
+              description: `시그니처 스페셜티 커피와 수제 디저트를 즐기며 잠시 쉬어가는 여유로운 오후`,
+              tip: safeInterests.includes('감성 카페')
+                ? '관심사로 선택하신 감성 카페 취향에 맞춰 인테리어와 뷰가 뛰어난 공간을 우선 추천했어요.'
+                : '창가 명당 자리는 오후 3~4시경 인기가 많으니 여유 있게 방문해보세요.'
+            });
+
+            // 19:00 저녁 및 야경/드라이브
+            const eveningInterest = safeInterests[(d + 1) % safeInterests.length];
+            if (eveningInterest === '야경/드라이브' || d === 0) {
+              items.push({
+                time: '19:00',
+                category: '야경/드라이브',
+                place: `${destination} 야경 전망대 & 밤산책 코스`,
+                description: `저녁 식사 후 화려한 조명과 밤공기를 마시며 하루를 마무리하는 로맨틱 코스`,
+                tip: '일몰 직후 매직아워 시간에 맞춰 방문하면 노을과 야경을 동시에 감상할 수 있습니다.'
+              });
+            } else {
+              items.push({
+                time: '18:30',
+                category: '맛집',
+                place: `${destination} 야시장 & 로컬 다이닝`,
+                description: `활기찬 저녁 분위기 속에서 ${destination}의 별미와 함께 즐기는 든든한 저녁 만찬`,
+                tip: `선택하신 '${eveningInterest}' 관심사와 연계해 주변 볼거리까지 함께 즐기기 좋은 위치입니다.`
+              });
+            }
+
+            days.push({
+              day: d + 1,
+              theme: dayThemes[d % dayThemes.length],
+              items
+            });
+          }
+        }
+
+        return {
+          destination,
+          summary: `${companionTone} ${destination} ${duration} 맞춤 코스 (${safeInterests.slice(0, 3).join(' · ')})`,
+          days
+        };
+      }
+
+      // ==========================================
+      // 6. 백엔드(/api/plan) 연동 및 Fallback 실행
+      // ==========================================
+      async function handleGenerateItinerary() {
+        const destination = els.destinationInput.value.trim();
+
+        // 여행지 필수 입력 검증
+        if (!destination) {
+          els.destinationInputWrapper.classList.remove('animate-shake');
+          void els.destinationInputWrapper.offsetWidth; // 리플로우 트리거
+          els.destinationInputWrapper.classList.add('animate-shake');
+          els.destinationInput.focus();
+          showToast('여행지를 입력하거나 추천 태그를 선택해주세요!');
+          return;
+        }
+
+        // 버튼 비활성화 및 로딩 스켈레톤 UI 노출
+        els.generateBtn.disabled = true;
+        els.generateBtn.classList.add('opacity-75', 'cursor-not-allowed');
+        els.resultSection.classList.add('hidden');
+        els.loadingSection.classList.remove('hidden');
+
+        // 로딩 영역으로 부드럽게 스크롤
+        els.loadingSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        const payload = {
+          destination,
+          duration: state.duration,
+          companion: state.companion,
+          interests: [...state.interests]
+        };
+
+        const startTime = Date.now();
+
+        try {
+          // 실제 Vercel Serverless Function(/api/plan) 호출 시도
+          const response = await fetch('/api/plan', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          // 응답 JSON 유효성 확인
+          if (!data || !Array.isArray(data.days) || data.days.length === 0) {
+            throw new Error('Invalid itinerary JSON format from /api/plan');
+          }
+
+          state.currentPlan = data;
+          state.isMockFallback = false;
+        } catch (error) {
+          // /api/plan 미구현(404) 또는 네트워크 오류 시 자연스럽게 예시 일정 Fallback 생성
+          console.info('[/api/plan 미연동 Fallback 동작]:', error.message);
+
+          // 스켈레톤 UI가 자연스럽게 인지되도록 최소 650ms 대기
+          const elapsed = Date.now() - startTime;
+          if (elapsed < 650) {
+            await new Promise((resolve) => setTimeout(resolve, 650 - elapsed));
+          }
+
+          state.currentPlan = buildDynamicFallbackPlan(
+            payload.destination,
+            payload.duration,
+            payload.companion,
+            payload.interests
+          );
+          state.isMockFallback = true;
+        } finally {
+          state.selectedDayFilter = 'all';
+          els.loadingSection.classList.add('hidden');
+          els.generateBtn.disabled = false;
+          els.generateBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+
+          renderItineraryResult();
+        }
+      }
+
+      els.generateBtn.addEventListener('click', handleGenerateItinerary);
+
+      // ==========================================
+      // 7. 결과 일정 렌더링 (상태 배지, Day 탭, 타임라인 카드)
+      // ==========================================
+
+      // 카테고리별 색상 스타일 반환
+      function getCategoryBadgeStyle(category) {
+        const map = {
+          '맛집': 'bg-orange-50 text-orange-600 border-orange-200',
+          '카페': 'bg-amber-50 text-amber-700 border-amber-200',
+          '자연/힐링': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          '힐링': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          '액티비티': 'bg-violet-50 text-violet-600 border-violet-200',
+          '인생샷': 'bg-pink-50 text-pink-600 border-pink-200',
+          '야경/드라이브': 'bg-indigo-50 text-indigo-600 border-indigo-200',
+          '야경': 'bg-indigo-50 text-indigo-600 border-indigo-200',
+          '문화/전시': 'bg-rose-50 text-rose-600 border-rose-200',
+          '관광': 'bg-sky-50 text-sky-600 border-sky-200'
+        };
+        return map[category] || 'bg-slate-100 text-slate-700 border-slate-200';
+      }
+
+      // 상단 상태 배지 및 요약 정보 렌더링
+      function renderItineraryResult() {
+        const plan = state.currentPlan;
+        if (!plan) return;
+
+        // API 상태 배지 업데이트
+        if (state.isMockFallback) {
+          els.apiStatusBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80';
+          els.apiStatusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>예시 일정 미리보기 · /api/plan 미연동';
+        } else {
+          els.apiStatusBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80';
+          els.apiStatusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Gemini AI 생성 완료';
+        }
+
+        els.resultDurationBadge.textContent = state.duration;
+        els.resultTitle.textContent = `${plan.destination} 맞춤 여행 일정`;
+        els.resultSummary.textContent = plan.summary || `${state.companion} 함께하는 ${plan.destination} 추천 코스`;
+
+        // 조건 태그 배지 렌더링
+        const metaTags = [`#${state.companion}`, ...state.interests.map((i) => `#${i}`)];
+        els.resultMetaTags.innerHTML = metaTags
+          .map((tag) => `<span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold">${escapeHtml(tag)}</span>`)
+          .join('');
+
+        renderDayFilterTabs();
+        renderDayCards();
+
+        els.resultSection.classList.remove('hidden');
+        els.resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      // Day 탭 필터 렌더링 (전체, Day 1, Day 2...)
+      function renderDayFilterTabs() {
+        const plan = state.currentPlan;
+        if (!plan) return;
+
+        const tabs = [
+          { id: 'all', label: `전체 (${plan.days.length}일)` },
+          ...plan.days.map((d) => ({ id: String(d.day), label: `Day ${d.day}` }))
+        ];
+
+        els.dayFilterTabs.innerHTML = tabs
+          .map((tab) => {
+            const isActive = String(state.selectedDayFilter) === tab.id;
+            const activeClass = isActive
+              ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100';
+            return `
+              <button
+                type="button"
+                data-day-tab="${tab.id}"
+                class="day-tab-btn px-4 py-2 rounded-full text-xs font-bold border whitespace-nowrap transition-all active:scale-95 ${activeClass}"
+              >
+                ${tab.label}
+              </button>
+            `;
+          })
+          .join('');
+      }
+
+      els.dayFilterTabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('.day-tab-btn');
+        if (!btn) return;
+        state.selectedDayFilter = btn.dataset.dayTab;
+        renderDayFilterTabs();
+        renderDayCards();
+      });
+
+      // XSS 방지를 위한 HTML 이스케이프 헬퍼
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      // 하루별 일정 카드 리스트 렌더링
+      function renderDayCards() {
+        const plan = state.currentPlan;
+        if (!plan) return;
+
+        const filteredDays = state.selectedDayFilter === 'all'
+          ? plan.days
+          : plan.days.filter((d) => String(d.day) === String(state.selectedDayFilter));
+
+        els.itineraryCardsContainer.innerHTML = filteredDays
+          .map((dayObj) => {
+            const itemsHtml = dayObj.items
+              .map((item, idx) => {
+                const isLast = idx === dayObj.items.length - 1;
+                const badgeClass = getCategoryBadgeStyle(item.category);
+                const mapQuery = encodeURIComponent(`${plan.destination} ${item.place}`);
+                const naverMapUrl = `https://m.map.naver.com/search2/search.naver?query=${mapQuery}`;
+                const kakaoMapUrl = `https://m.map.kakao.com/actions/searchView?q=${mapQuery}`;
+
+                return `
+                  <div class="relative flex gap-3.5 ${isLast ? '' : 'pb-6'}">
+                    <!-- 세로 타임라인 연결선 -->
+                    ${!isLast ? '<div class="absolute left-[23px] top-7 bottom-0 w-[2px] bg-slate-100"></div>' : ''}
+
+                    <!-- 좌측 시간 표시 컬럼 -->
+                    <div class="w-12 shrink-0 flex flex-col items-center pt-0.5 z-10">
+                      <span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px] tabular-nums">
+                        ${escapeHtml(item.time)}
+                      </span>
+                      <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-white mt-2"></span>
+                    </div>
+
+                    <!-- 우측 장소 상세 카드 -->
+                    <div class="flex-1 min-w-0 bg-slate-50/70 rounded-2xl p-3.5 border border-slate-200/60 space-y-2.5">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badgeClass}">
+                          ${escapeHtml(item.category)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h4 class="text-[15px] font-bold text-slate-900 leading-snug">${escapeHtml(item.place)}</h4>
+                        <p class="text-xs text-slate-600 mt-1 leading-relaxed">${escapeHtml(item.description)}</p>
+                      </div>
+
+                      <!-- 추천 Tip 박스 -->
+                      ${item.tip ? `
+                        <div class="bg-white rounded-xl p-2.5 border border-slate-200/60 flex items-start gap-2">
+                          <span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-extrabold text-[10px] shrink-0 mt-0.5">TIP</span>
+                          <p class="text-[11px] text-slate-600 leading-relaxed">${escapeHtml(item.tip)}</p>
+                        </div>
+                      ` : ''}
+
+                      <!-- 모바일 지도 바로 열기 버튼 (네이버 지도 / 카카오맵) -->
+                      <div class="grid grid-cols-2 gap-2 pt-0.5">
+                        <a
+                          href="${naverMapUrl}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-white hover:bg-emerald-50/60 active:scale-95 border border-slate-200 text-[11px] font-bold text-slate-700 transition-all"
+                        >
+                          <span class="w-4 h-4 rounded bg-[#03C75A] text-white font-black text-[10px] flex items-center justify-center shrink-0">N</span>
+                          <span>네이버 지도</span>
+                        </a>
+                        <a
+                          href="${kakaoMapUrl}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-white hover:bg-amber-50/60 active:scale-95 border border-slate-200 text-[11px] font-bold text-slate-700 transition-all"
+                        >
+                          <span class="w-4 h-4 rounded bg-[#FEE500] text-[#191919] font-black text-[10px] flex items-center justify-center shrink-0">K</span>
+                          <span>카카오맵</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              })
+              .join('');
+
+            return `
+              <article class="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/70 space-y-5 animate-fade-in-up">
+                <!-- Day 카드 헤더 -->
+                <div class="flex items-start gap-3 pb-3.5 border-b border-slate-100">
+                  <span class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-extrabold tracking-wide shrink-0 shadow-xs">
+                    Day ${dayObj.day}
+                  </span>
+                  <div class="min-w-0">
+                    <p class="text-[11px] font-semibold text-indigo-600">DAY ${dayObj.day} 테마</p>
+                    <h3 class="text-sm font-bold text-slate-900 leading-snug mt-0.5">${escapeHtml(dayObj.theme)}</h3>
+                  </div>
+                </div>
+
+                <!-- 타임라인 리스트 -->
+                <div>
+                  ${itemsHtml}
+                </div>
+              </article>
+            `;
+          })
+          .join('');
+      }
+
+      // ==========================================
+      // 8. 하단 액션 버튼 (카카오톡 공유용 텍스트 복사 / 조건 다시 설정)
+      // ==========================================
+      els.copyItineraryBtn.addEventListener('click', () => {
+        const plan = state.currentPlan;
+        if (!plan) return;
+
+        const lines = [];
+        lines.push(`✈️ [${plan.destination} ${state.duration} 맞춤 여행 일정]`);
+        lines.push(`👥 동행: ${state.companion}`);
+        if (state.interests.length > 0) {
+          lines.push(`✨ 관심사: ${state.interests.join(', ')}`);
+        }
+        lines.push(`📝 ${plan.summary}`);
+        lines.push('');
+
+        plan.days.forEach((d) => {
+          lines.push(`━━━━━━━━━━━━━━━━━━`);
+          lines.push(`📅 Day ${d.day} · ${d.theme}`);
+          lines.push(`━━━━━━━━━━━━━━━━━━`);
+          d.items.forEach((item) => {
+            lines.push(`⏰ ${item.time} [${item.category}] ${item.place}`);
+            lines.push(`   - ${item.description}`);
+            if (item.tip) {
+              lines.push(`   💡 Tip: ${item.tip}`);
+            }
+          });
+          lines.push('');
+        });
+
+        lines.push('Generated by AI 트립 플래너');
+
+        copyTextToClipboard(
+          lines.join('\n'),
+          '카카오톡에 붙여넣기 좋은 형태로 일정이 복사되었어요!'
+        );
+      });
+
+      els.resetConditionsBtn.addEventListener('click', () => {
+        const formTop = document.getElementById('formSection');
+        formTop.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => {
+          els.destinationInput.focus();
+        }, 400);
+      });
+
+      // ==========================================
+      // 9. /api/plan 연동 가이드 모달 컨트롤
+      // ==========================================
+      function openModal() {
+        els.apiGuideModal.classList.remove('hidden');
+        els.apiGuideModal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeModal() {
+        els.apiGuideModal.classList.add('hidden');
+        els.apiGuideModal.classList.remove('flex');
+        document.body.style.overflow = '';
+      }
+
+      els.openGuideBtn.addEventListener('click', openModal);
+      els.closeGuideBtn.addEventListener('click', closeModal);
+      els.modalConfirmBtn.addEventListener('click', closeModal);
+
+      // 모달 바깥 영역 클릭 시 닫기
+      els.apiGuideModal.addEventListener('click', (e) => {
+        if (e.target === els.apiGuideModal) {
+          closeModal();
+        }
+      });
+
+      // 모달 내 JSON 스니펫 복사 버튼
+      document.querySelectorAll('.copy-json-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.dataset.copyTarget;
+          const codeEl = document.getElementById(targetId);
+          if (codeEl) {
+            copyTextToClipboard(codeEl.textContent, 'JSON 스키마가 클립보드에 복사되었어요!');
+          }
+        });
+      });
+
+      // ESC 키로 모달 닫기 지원
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !els.apiGuideModal.classList.contains('hidden')) {
+          closeModal();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
