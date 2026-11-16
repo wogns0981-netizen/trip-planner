@@ -188,10 +188,10 @@ export default async function handler(req, res) {
       notice: parsed.notice,
       days: parsed.days,
     });
-  } catch (error) {
+ } catch (error) {
     console.error('Gemini /api/plan error:', error);
     return res.status(502).json({
-      error: '여행 일정을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+      error: `일정 생성 오류: ${error?.message || '잠시 후 다시 시도해 주세요.'}`,
     });
   }
 }
