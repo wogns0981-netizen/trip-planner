@@ -930,10 +930,26 @@
         attributionControl: false
       }).setView([37.7519, 128.8761], 12);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 18
-      }).addTo(leafletMap);
+     const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      });
 
+      const esriFallbackLayer = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 18 }
+      );
+
+      let switchedToFallback = false;
+      osmLayer.on('tileerror', () => {
+        if (!switchedToFallback) {
+          switchedToFallback = true;
+          leafletMap.removeLayer(osmLayer);
+          esriFallbackLayer.addTo(leafletMap);
+        }
+      });
+
+      osmLayer.addTo(leafletMap);
+      
       mapLayerGroup = L.layerGroup().addTo(leafletMap);
     }
 
